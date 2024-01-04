@@ -16,8 +16,7 @@ describe('Teste de API usando Cypress', () => {
       expect(response.status).to.equal(201);
 
       // Validar campos específicos na resposta usando POJO
-      const responseBody = new CreateUserResponse(response.body.id, response.body.createdAt);
-      
+      const responseBody = new CreateUserResponse(response.body.id, response.body.createdAt);      
       expect(responseBody.id).to.exist;
       expect(responseBody.createdAt).to.exist;
     });
