@@ -1,7 +1,7 @@
 // cypress/integration/createUser.spec.js
 
-import { JsonRequest } from '../api/jsonRequest';
-import { CreateUserResponse } from '../api/createUserResponse';
+import { JsonRequest } from './json_Requisi';
+import { CreateUserResponse } from './createUserResp';
 
 describe('Teste de API usando Cypress', () => {
   it('Criação de usuário (POST)', () => {
