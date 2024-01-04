@@ -1,0 +1,120 @@
+name: "Teste Contínuo da Sqd Mdm Figital"
+on:
+  # schedule:
+  #   - cron: '0 18 * * 4'
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Selecionar um ambiente válido: hml, qa"
+        required: true
+        default: "qa"
+      requester:
+        description: "E-mail do solicitante"
+        required: true
+        default: "geovann@gmail.com"
+      grepNames:
+        description: "Incluir testes por nome no código: @kafka; REDIS; XTG-T1234. Deixar em branco para não filtrar por nome."
+        required: false
+        default: ""
+      grepTags:
+        description: "Incluir testes por tag no código: @exploratorio; @integracao; @regressao. Deixar em branco para não filtrar por tag."
+        required: false
+        default: ""
+      browserName:
+        description: "Definir nome do browser de teste: chrome, firefox, edge, electron."
+        required: true
+        default: "chrome"
+      
+jobs:
+  test:
+    name: Testes de Integração
+    runs-on: self-hosted
+    #container: cypress/browsers:latest
+    container: yabab/cypress-node-gyp:node16.20_chrome113.0.5672.63-1_edge112.0.1722.64-1_ff112.0.2
+    strategy:
+      fail-fast: false
+      # matrix:
+        # run copies of the current job in parallel
+        # containers: [1, 2, 3, 4]
+
+    steps:
+      - name: Checkout do Projeto
+        uses: actions/checkout@v3
+
+      # - name: Checkout do Convair Actions      
+      #   uses: actions/checkout@v3
+      #   with:
+      #     repository: viavarejo-internal/convair-actions
+      #     token: ${{ secrets.ACTIONS_TOKEN }}
+      #     path: ./.convair-actions
+      #     ref: main
+
+      # - name: Substituir os Hosts do Runner com os Hosts do Projeto
+      #   run: cat "${GITHUB_WORKSPACE}/ci/hosts.txt" >> /etc/host
+
+      - name: Definir Nexus ViaHub como o registry do NPM 
+        run: npm config set registry=${{ secrets.NEXUS_SERVER_URL }}
+
+      - name: Autenticar no Nexus ViaHub
+        run: npm config set _auth=${{ secrets.NEXUS_AUTH_TOKEN }}
+
+      - name: Testar
+        timeout-minutes: 20
+        uses: cypress-io/github-action@v5
+        with:
+          install-command: npm install
+          command: npm run cy:test -- --record --key ${{ secrets.CYPRESS_DASHBOARD_KEY }} --browser ${{ github.event.inputs.browserName}} --env grep=${{ github.event.inputs.grepNames }},grepTags=${{ github.event.inputs.grepTags }}
+
+      - name: Recuperar histórico do Allure
+        uses: actions/checkout@v3
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Gerar report do Allure
+        uses: simple-elf/allure-report-action@master
+        if: always()
+        id: allure-report
+        with:
+          gh_pages: gh-pages
+          allure_results: allure-results
+          allure_report: allure-report
+          allure_history: allure-history
+          keep_reports: 20
+
+      - name: Enviar report do Allure para o GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v2
+        env:
+          PERSONAL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_BRANCH: gh-pages
+          PUBLISH_DIR: allure-history
+
+      - name: Empacotar report do Allure
+        run: zip -r report.zip allure-report
+
+      - name: Disponibilizar report do Allure como artefato
+        uses: actions/upload-artifact@v3
+        with:
+          name: report_package
+          path: report.zip
+
+      # - name: Enviar Report por E-mail
+      #   uses: dawidd6/action-send-mail@v3
+      #   with:
+      #     connection_url: smtp+starttls://smtp.office365.com:465
+      #     username: ${{ secrets.MAIL_USERNAME }}
+      #     password: ${{ secrets.MAIL_PASSWORD }}
+      #     from: ${{ github.event.inputs.requester }}
+      #     to: ${{ github.event.inputs.requester }}
+      #     subject: 'Resultados dos Testes Integrados do figital-sync-cypress'
+      #     body: |
+      #       Olá,
+
+      #       Aqui estão os resultados da última execução Cypress para o projeto figital-sync-cypress.
+
+      #       Obrigado!
+      #     attachments: report.zip
+      #     secure: true
